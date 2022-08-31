@@ -1,0 +1,12 @@
+<component name="libraryTable">
+  <library name="javazoom.jlayer" type="repository">
+    <properties maven-id="javazoom:jlayer:1.0.1" />
+    <CLASSES>
+      <root url="jar://$MAVEN_REPOSITORY$/javazoom/jlayer/1.0.1/jlayer-1.0.1.jar!/" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES>
+      <root url="jar://$MAVEN_REPOSITORY$/javazoom/jlayer/1.0.1/jlayer-1.0.1-sources.jar!/" />
+    </SOURCES>
+  </library>
+</component>
