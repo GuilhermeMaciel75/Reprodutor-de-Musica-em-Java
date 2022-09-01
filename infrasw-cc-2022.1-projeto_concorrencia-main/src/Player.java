@@ -6,6 +6,7 @@ import javazoom.jl.player.FactoryRegistry;
 import support.PlayerWindow;
 import support.Song;
 
+import javax.swing.*;
 import javax.swing.event.MouseInputAdapter;
 import java.awt.*;
 import java.awt.event.ActionListener;
@@ -32,6 +33,13 @@ public class Player {
 
     private PlayerWindow window;
 
+    private SwingWorker runner;
+
+    private Boolean active_play_pause = new Boolean(true);
+    private Boolean press_play_pause = new Boolean(true);
+    private Boolean active_stop = new Boolean(false);
+
+
     private final ReentrantLock lock = new ReentrantLock();
     private final Condition lockCondition = lock.newCondition();
 
@@ -39,46 +47,68 @@ public class Player {
     private Song[] lista_songs = new Song[1];
     int stopPlayNow = 0;
 
-    private int currentFrame = 0;
+    public int currentFrame = 0;
 
+    //Função responsável por reproduzir a múscia
     private final ActionListener buttonListenerPlayNow = e -> {
         currentFrame = 0;
-        this.window.setPlayingSongInfo(lista_songs[0].getTitle(), lista_songs[0].getAlbum(), lista_songs[0].getArtist());
 
-        if(this.bitstream != null){
-            try {
-                bitstream.close();
-            } catch (BitstreamException ex) {
-                throw new RuntimeException(ex);
+         runner = new SwingWorker(){
+            @Override
+            public Object doInBackground() throws Exception{
+                window.setPlayingSongInfo(lista_songs[0].getTitle(), lista_songs[0].getAlbum(), lista_songs[0].getArtist());
+
+                if(bitstream != null){
+                    try {
+                        bitstream.close();
+                    } catch (BitstreamException ex) {
+                        throw new RuntimeException(ex);
+                    }
+
+                    device.close();
+                }
+
+                try {
+                    device = FactoryRegistry.systemRegistry().createAudioDevice();
+                } catch (JavaLayerException ex) {
+                    throw new RuntimeException(ex);
+                }
+                try {
+                    device.open(decoder = new Decoder());
+                } catch (JavaLayerException ex) {
+                    throw new RuntimeException(ex);
+                }
+                try {
+                    bitstream = new Bitstream(lista_songs[0].getBufferedInputStream());
+                } catch (FileNotFoundException ex) {
+                    throw new RuntimeException(ex);
+                }
+
+                while(true){
+                    if (press_play_pause){
+                        try {
+                            window.setTime((int) (currentFrame * (int) lista_songs[0].getMsPerFrame()), (int) lista_songs[0].getMsLength());
+                            window.setPlayPauseButtonIcon(1);
+                            window.setEnabledPlayPauseButton(true);
+                            window.setEnabledStopButton(true);
+                            active_play_pause = true;
+                            active_stop = true;
+
+                            playNextFrame();
+
+                        } catch (JavaLayerException ex) {
+                            throw new RuntimeException(ex);
+                        }
+                    }
+
+                }
+
             }
 
-            device.close();
-        }
+        };
 
-        try {
-            this.device = FactoryRegistry.systemRegistry().createAudioDevice();
-        } catch (JavaLayerException ex) {
-            throw new RuntimeException(ex);
-        }
-        try {
-            this.device.open(this.decoder = new Decoder());
-        } catch (JavaLayerException ex) {
-            throw new RuntimeException(ex);
-        }
-        try {
-            this.bitstream = new Bitstream(lista_songs[0].getBufferedInputStream());
-        } catch (FileNotFoundException ex) {
-            throw new RuntimeException(ex);
-        }
+        runner.execute();
 
-        while(true){
-            //this.window.setTime(, lista_songs[0].getMsLength());
-            try {
-                playNextFrame();
-            } catch (JavaLayerException ex) {
-                throw new RuntimeException(ex);
-            }
-        }
     };
     private final ActionListener buttonListenerRemove = e -> {};
     private final ActionListener buttonListenerAddSong = e -> {
@@ -106,12 +136,39 @@ public class Player {
 
 
     };
-    private final ActionListener buttonListenerPlayPause = e -> {};
-    private final ActionListener buttonListenerStop = e -> {};
+    private final ActionListener buttonListenerPlayPause = e -> {
+        synchronized (runner){
+            int button_icon_play = window.BUTTON_ICON_PAUSE;
+            if (active_play_pause == true){
+                press_play_pause = false;
+                active_play_pause = false;
+                window.setPlayPauseButtonIcon(0);
+            }
+
+            else{
+                press_play_pause = true;
+                active_play_pause = true;
+                window.setPlayPauseButtonIcon(1);
+            }
+        }
+
+    };
+    private final ActionListener buttonListenerStop = e -> {
+        synchronized (runner){
+            if(active_stop == true){
+                press_play_pause = false;
+                window.setEnabledStopButton(false);
+                window.resetMiniPlayer();
+            }
+        }
+
+    };
     private final ActionListener buttonListenerNext = e -> {};
     private final ActionListener buttonListenerPrevious = e -> {};
     private final ActionListener buttonListenerShuffle = e -> {};
-    private final ActionListener buttonListenerLoop = e -> {};
+    private final ActionListener buttonListenerLoop = e -> {
+
+    };
     private final MouseInputAdapter scrubberMouseInputAdapter = new MouseInputAdapter() {
         @Override
         public void mouseReleased(MouseEvent e) {
@@ -143,6 +200,7 @@ public class Player {
         );
     }
 
+
     //<editor-fold desc="Essential">
 
     /**
@@ -157,6 +215,7 @@ public class Player {
             SampleBuffer output = (SampleBuffer) decoder.decodeFrame(h, bitstream);
             device.write(output.getBuffer(), 0, output.getBufferLength());
             bitstream.closeFrame();
+            currentFrame++;
         }
         return true;
     }
