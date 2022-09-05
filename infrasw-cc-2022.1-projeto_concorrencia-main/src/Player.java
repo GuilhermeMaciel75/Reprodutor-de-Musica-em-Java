@@ -50,7 +50,7 @@ public class Player {
     private ArrayList<String[]> musics_temp = new ArrayList<String[]>();
     private String[][] musics = {};
 
-    private String name;
+    //Variaveis utilizadas nas funções
     private Song actual_song;
     private Song remove_music;
     private int idx;
@@ -61,17 +61,20 @@ public class Player {
     private final ActionListener buttonListenerPlayNow = e -> {
         currentFrame = 0;
 
+        //Pegando a música especificada pelo usuário (Aquela que ele clicou)
         idx = window.getIndex();
         actual_song = lista_songs.get(idx);
-
-        System.out.println(idx);
         press_play_pause = true;
+
+        //Criando a Thread de execução da música
         runner = new SwingWorker(){
             @Override
             public Object doInBackground() throws Exception{
 
-                window.setPlayingSongInfo(actual_song.getTitle(), actual_song.getAlbum(), actual_song.getArtist());
+                window.setPlayingSongInfo(actual_song.getTitle(), actual_song.getAlbum(), actual_song.getArtist()); //Setando as informações na tela
 
+                //Condicional responsável por fazer a música executar até os bitstreans terminarem, quando eles terminam
+                //A música é finalizada
                 if(bitstream != null){
                     try {
                         bitstream.close();
@@ -82,6 +85,7 @@ public class Player {
                     device.close();
                 }
 
+                //Declaração do device e bitstream
                 try {
                     device = FactoryRegistry.systemRegistry().createAudioDevice();
                     device.open(decoder = new Decoder());
@@ -90,6 +94,8 @@ public class Player {
                     throw new RuntimeException(ex);
                 }
 
+                //Loop de repetição que coloca o tempo na tela, faz a música efetivamente rodar
+                //Verifica se o botao_play_pause foi clicado
                 while(true){
                     if (press_play_pause){
                         try {
@@ -117,17 +123,23 @@ public class Player {
 
     };
     private final ActionListener buttonListenerRemove = e -> {
+
+        //Pegando a música que foi selecionada pelo usuário
         idx = window.getIndex();
         remove_music = lista_songs.get(idx);
+
+        //Removendo a música da lista mostrada ao usuário
         musics_temp.remove(idx);
         musics = musics_temp.toArray(new String[this.musics_temp.size()][7]);
         window.setQueueList(musics);
+
+        //Removendo a música da lista de songs
         lista_songs.remove(idx);
 
+        //Condicional que verifica se a música que está tocando é a que foi removida
         if(currentFrame != 0 && actual_song == remove_music){
-            press_play_pause = false;
-            window.setEnabledStopButton(false);
-            window.resetMiniPlayer();
+            stop();
+
         }
 
 
@@ -136,6 +148,7 @@ public class Player {
 
         Song music;
 
+        //Abertura da aba para recebimento do arquivo de música do usuário
         try {
             music = this.window.openFileChooser();
         } catch (IOException ex) {
@@ -149,23 +162,25 @@ public class Player {
         }
 
 
-        //array dinamico Lista Display
+        //Adicionando a nova música ao array de display
         musics_temp.add(music.getDisplayInfo());
         musics = musics_temp.toArray(new String[this.musics_temp.size()][7]);
         window.setQueueList(musics);
 
-        //Array dinâmico Lista Songs
+        //Adicionando a nova música ao array de song (Array, que efetivamente executa a música)
         lista_songs.add(music);
 
     };
     private final ActionListener buttonListenerPlayPause = e -> {
 
+        //Caso o botão pause esteja ativo (Música Em execução)
         if (active_play_pause == true){
             press_play_pause = false;
             active_play_pause = false;
             window.setPlayPauseButtonIcon(0);
         }
 
+        //Caso o botão esteja no estado de play (Música pausada)
         else{
             press_play_pause = true;
             active_play_pause = true;
@@ -176,9 +191,7 @@ public class Player {
     private final ActionListener buttonListenerStop = e -> {
 
         if(active_stop == true){
-            press_play_pause = false;
-            window.setEnabledStopButton(false);
-            window.resetMiniPlayer();
+            stop();
         }
 
     };
@@ -262,6 +275,12 @@ public class Player {
             boolean condition = true;
             while (framesToSkip-- > 0 && condition) condition = skipNextFrame();
         }
+    }
+
+    private void stop(){
+        press_play_pause = false;
+        window.setEnabledStopButton(false);
+        window.resetMiniPlayer();
     }
     //</editor-fold>
 }
