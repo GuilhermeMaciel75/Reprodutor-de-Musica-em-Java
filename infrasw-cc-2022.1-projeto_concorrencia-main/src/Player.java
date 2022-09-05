@@ -15,6 +15,7 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.ArrayList;
 
 public class Player {
 
@@ -43,9 +44,16 @@ public class Player {
     private final ReentrantLock lock = new ReentrantLock();
     private final Condition lockCondition = lock.newCondition();
 
-    private String[][] musics = new String[1][0];
-    private Song[] lista_songs = new Song[1];
-    int stopPlayNow = 0;
+
+    //Array dinamicos
+    private ArrayList<Song> lista_songs = new ArrayList<Song>();
+    private ArrayList<String[]> musics_temp = new ArrayList<String[]>();
+    private String[][] musics = {};
+
+    private String name;
+    private Song actual_song;
+    private Song remove_music;
+    private int idx;
 
     public int currentFrame = 0;
 
@@ -53,10 +61,16 @@ public class Player {
     private final ActionListener buttonListenerPlayNow = e -> {
         currentFrame = 0;
 
-         runner = new SwingWorker(){
+        idx = window.getIndex();
+        actual_song = lista_songs.get(idx);
+
+        System.out.println(idx);
+        press_play_pause = true;
+        runner = new SwingWorker(){
             @Override
             public Object doInBackground() throws Exception{
-                window.setPlayingSongInfo(lista_songs[0].getTitle(), lista_songs[0].getAlbum(), lista_songs[0].getArtist());
+
+                window.setPlayingSongInfo(actual_song.getTitle(), actual_song.getAlbum(), actual_song.getArtist());
 
                 if(bitstream != null){
                     try {
@@ -70,24 +84,16 @@ public class Player {
 
                 try {
                     device = FactoryRegistry.systemRegistry().createAudioDevice();
-                } catch (JavaLayerException ex) {
-                    throw new RuntimeException(ex);
-                }
-                try {
                     device.open(decoder = new Decoder());
-                } catch (JavaLayerException ex) {
-                    throw new RuntimeException(ex);
-                }
-                try {
-                    bitstream = new Bitstream(lista_songs[0].getBufferedInputStream());
-                } catch (FileNotFoundException ex) {
+                    bitstream = new Bitstream(actual_song.getBufferedInputStream());
+                } catch (JavaLayerException | FileNotFoundException ex) {
                     throw new RuntimeException(ex);
                 }
 
                 while(true){
                     if (press_play_pause){
                         try {
-                            window.setTime((int) (currentFrame * (int) lista_songs[0].getMsPerFrame()), (int) lista_songs[0].getMsLength());
+                            window.setTime((int) (currentFrame * (int) actual_song.getMsPerFrame()), (int) actual_song.getMsLength());
                             window.setPlayPauseButtonIcon(1);
                             window.setEnabledPlayPauseButton(true);
                             window.setEnabledStopButton(true);
@@ -110,7 +116,22 @@ public class Player {
         runner.execute();
 
     };
-    private final ActionListener buttonListenerRemove = e -> {};
+    private final ActionListener buttonListenerRemove = e -> {
+        idx = window.getIndex();
+        remove_music = lista_songs.get(idx);
+        musics_temp.remove(idx);
+        musics = musics_temp.toArray(new String[this.musics_temp.size()][7]);
+        window.setQueueList(musics);
+        lista_songs.remove(idx);
+
+        if(currentFrame != 0 && actual_song == remove_music){
+            press_play_pause = false;
+            window.setEnabledStopButton(false);
+            window.resetMiniPlayer();
+        }
+
+
+    };
     private final ActionListener buttonListenerAddSong = e -> {
 
         Song music;
@@ -127,48 +148,44 @@ public class Player {
             throw new RuntimeException(ex);
         }
 
-        musics[0] = music.getDisplayInfo();
 
-        this.window.setQueueList(musics);
+        //array dinamico Lista Display
+        musics_temp.add(music.getDisplayInfo());
+        musics = musics_temp.toArray(new String[this.musics_temp.size()][7]);
+        window.setQueueList(musics);
 
-        lista_songs[0] = music;
-
-
+        //Array dinâmico Lista Songs
+        lista_songs.add(music);
 
     };
     private final ActionListener buttonListenerPlayPause = e -> {
-        synchronized (runner){
-            int button_icon_play = window.BUTTON_ICON_PAUSE;
-            if (active_play_pause == true){
-                press_play_pause = false;
-                active_play_pause = false;
-                window.setPlayPauseButtonIcon(0);
-            }
 
-            else{
-                press_play_pause = true;
-                active_play_pause = true;
-                window.setPlayPauseButtonIcon(1);
-            }
+        if (active_play_pause == true){
+            press_play_pause = false;
+            active_play_pause = false;
+            window.setPlayPauseButtonIcon(0);
+        }
+
+        else{
+            press_play_pause = true;
+            active_play_pause = true;
+            window.setPlayPauseButtonIcon(1);
         }
 
     };
     private final ActionListener buttonListenerStop = e -> {
-        synchronized (runner){
-            if(active_stop == true){
-                press_play_pause = false;
-                window.setEnabledStopButton(false);
-                window.resetMiniPlayer();
-            }
+
+        if(active_stop == true){
+            press_play_pause = false;
+            window.setEnabledStopButton(false);
+            window.resetMiniPlayer();
         }
 
     };
     private final ActionListener buttonListenerNext = e -> {};
     private final ActionListener buttonListenerPrevious = e -> {};
     private final ActionListener buttonListenerShuffle = e -> {};
-    private final ActionListener buttonListenerLoop = e -> {
-
-    };
+    private final ActionListener buttonListenerLoop = e -> {};
     private final MouseInputAdapter scrubberMouseInputAdapter = new MouseInputAdapter() {
         @Override
         public void mouseReleased(MouseEvent e) {

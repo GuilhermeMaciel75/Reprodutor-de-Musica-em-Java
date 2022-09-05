@@ -432,6 +432,11 @@ public class PlayerWindow {
         return String.valueOf((queueList.getValueAt(queueList.getSelectedRow(), 5)));
     }
 
+    public int getIndex() {
+        return queueList.getSelectedRow();
+
+    }
+
     /**
      * Should be called whenever the user manually changes the scrubber state with the cursor.
      *
