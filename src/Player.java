@@ -36,108 +36,109 @@ public class Player {
 
     private SwingWorker runner;
 
-    private Boolean active_play_pause = new Boolean(true);
-    private Boolean press_play_pause = new Boolean(true);
-    private Boolean active_stop = new Boolean(false);
+    //Variável booleana responsável por saber em qual estado o botão de play/ pause está
+    private boolean activeButtonPlayPause = true;
 
+    // Variável que é responsável por verificar se o botão de pause está ativo
+    private boolean pressButtonPlayPause = true;
+    // Variável que é responsável por verificar se o botão de STOP está ativo, caso ele esteja  a música para por completo
+    private boolean activeButtonStop = false;
+    private boolean playing = true;
 
     private final ReentrantLock lock = new ReentrantLock();
     private final Condition lockCondition = lock.newCondition();
 
 
-    //Array dinamicos
-    private ArrayList<Song> lista_songs = new ArrayList<Song>();
-    private ArrayList<String[]> musics_temp = new ArrayList<String[]>();
-    private String[][] musics = {};
+    //Array dinamicos, o primeiro salva todas as músicas da classe Song
+    //Já o segundo guarda apenas as musicas que serão coladas no display para vizualização pelo usuário
+    private ArrayList<Song> songsListDynamic = new ArrayList<Song>();
+    private ArrayList<String[]> musicsListDynamic = new ArrayList<String[]>();
+    private String[][] musicsListStatic = {};
 
     //Variaveis utilizadas nas funções
-    private Song actual_song;
-    private Song remove_music;
-    private int idx;
+    private Song songPlaying; // Variável do tipo song, que armazena as informações da música que está sendo tocada no momento
+    private Song removeMusic; // Variável do do tipo song que armazena as informaçõs da música que foi removida da lista de reprodução
+    private int idxMusic; // Variável quer armazena o ínidice atual da música que esta sendo tocada ou Da música que será removida
 
     public int currentFrame = 0;
+
+    public void musicPlaying(){
+
+        Thread running = new Thread(() -> {
+            playing = true;
+            while(playing && pressButtonPlayPause){
+                try{
+                    window.setTime((int) (currentFrame * (int) songPlaying.getMsPerFrame()), (int) songPlaying.getMsLength());
+                    if(window.getScrubberValue() < songPlaying.getMsLength()) {
+                        playing = playNextFrame();
+                    }
+                    else{
+                        playing = false;
+                    }
+                } catch (JavaLayerException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+        });
+
+        running.start();
+    }
 
     //Função responsável por reproduzir a múscia
     private final ActionListener buttonListenerPlayNow = e -> {
         currentFrame = 0;
 
-        //Pegando a música especificada pelo usuário (Aquela que ele clicou)
-        idx = window.getIndex();
-        actual_song = lista_songs.get(idx);
-        press_play_pause = true;
+        Thread playing = new Thread(()->{
+            try{
+                lock.lock();
 
-        //Criando a Thread de execução da música
-        runner = new SwingWorker(){
-            @Override
-            public Object doInBackground() throws Exception{
+                //Pegando a música especificada pelo usuário (Aquela que ele clicou)
+                idxMusic = window.getIndex();
+                songPlaying = songsListDynamic.get(idxMusic);
 
-                window.setPlayingSongInfo(actual_song.getTitle(), actual_song.getAlbum(), actual_song.getArtist()); //Setando as informações na tela
+                window.setPlayingSongInfo(songPlaying.getTitle(), songPlaying.getAlbum(), songPlaying.getArtist()); //Setando as informações na tela
+                pressButtonPlayPause = true;
+                window.setPlayPauseButtonIcon(1);
+                window.setEnabledPlayPauseButton(true);
+                window.setEnabledStopButton(true);
+                activeButtonPlayPause = true;
+                activeButtonStop = true;
 
-                //Condicional responsável por fazer a música executar até os bitstreans terminarem, quando eles terminam
-                //A música é finalizada
-                if(bitstream != null){
-                    try {
-                        bitstream.close();
-                    } catch (BitstreamException ex) {
-                        throw new RuntimeException(ex);
-                    }
-
-                    device.close();
-                }
-
-                //Declaração do device e bitstream
                 try {
                     device = FactoryRegistry.systemRegistry().createAudioDevice();
                     device.open(decoder = new Decoder());
-                    bitstream = new Bitstream(actual_song.getBufferedInputStream());
+                    bitstream = new Bitstream(songPlaying.getBufferedInputStream());
+                    musicPlaying();
+
                 } catch (JavaLayerException | FileNotFoundException ex) {
                     throw new RuntimeException(ex);
                 }
 
-                //Loop de repetição que coloca o tempo na tela, faz a música efetivamente rodar
-                //Verifica se o botao_play_pause foi clicado
-                while(true){
-                    if (press_play_pause){
-                        try {
-                            window.setTime((int) (currentFrame * (int) actual_song.getMsPerFrame()), (int) actual_song.getMsLength());
-                            window.setPlayPauseButtonIcon(1);
-                            window.setEnabledPlayPauseButton(true);
-                            window.setEnabledStopButton(true);
-                            active_play_pause = true;
-                            active_stop = true;
-
-                            playNextFrame();
-
-                        } catch (JavaLayerException ex) {
-                            throw new RuntimeException(ex);
-                        }
-                    }
-
-                }
-
+            }
+            finally {
+                lock.unlock();
             }
 
-        };
+        });
 
-        runner.execute();
-
+        playing.start();
     };
     private final ActionListener buttonListenerRemove = e -> {
 
         //Pegando a música que foi selecionada pelo usuário
-        idx = window.getIndex();
-        remove_music = lista_songs.get(idx);
+        idxMusic = window.getIndex();
+        removeMusic = songsListDynamic.get(idxMusic);
 
         //Removendo a música da lista mostrada ao usuário
-        musics_temp.remove(idx);
-        musics = musics_temp.toArray(new String[this.musics_temp.size()][7]);
-        window.setQueueList(musics);
+        musicsListDynamic.remove(idxMusic);
+        musicsListStatic = musicsListDynamic.toArray(new String[this.musicsListDynamic.size()][7]);
+        window.setQueueList(musicsListStatic);
 
         //Removendo a música da lista de songs
-        lista_songs.remove(idx);
+        songsListDynamic.remove(idxMusic);
 
         //Condicional que verifica se a música que está tocando é a que foi removida
-        if(currentFrame != 0 && actual_song == remove_music){
+        if(currentFrame != 0 && songPlaying == removeMusic){
             stop();
 
         }
@@ -163,34 +164,35 @@ public class Player {
 
 
         //Adicionando a nova música ao array de display
-        musics_temp.add(music.getDisplayInfo());
-        musics = musics_temp.toArray(new String[this.musics_temp.size()][7]);
-        window.setQueueList(musics);
+        musicsListDynamic.add(music.getDisplayInfo());
+        musicsListStatic = musicsListDynamic.toArray(new String[this.musicsListDynamic.size()][7]);
+        window.setQueueList(musicsListStatic);
 
         //Adicionando a nova música ao array de song (Array, que efetivamente executa a música)
-        lista_songs.add(music);
+        songsListDynamic.add(music);
 
     };
     private final ActionListener buttonListenerPlayPause = e -> {
 
         //Caso o botão pause esteja ativo (Música Em execução)
-        if (active_play_pause == true){
-            press_play_pause = false;
-            active_play_pause = false;
+        if (activeButtonPlayPause == true){
+            pressButtonPlayPause = false;
+            activeButtonPlayPause = false;
             window.setPlayPauseButtonIcon(0);
         }
 
         //Caso o botão esteja no estado de play (Música pausada)
         else{
-            press_play_pause = true;
-            active_play_pause = true;
+            pressButtonPlayPause = true;
+            activeButtonPlayPause = true;
+            musicPlaying();
             window.setPlayPauseButtonIcon(1);
         }
 
     };
     private final ActionListener buttonListenerStop = e -> {
 
-        if(active_stop == true){
+        if(activeButtonStop == true){
             stop();
         }
 
@@ -216,7 +218,7 @@ public class Player {
     public Player() {
         EventQueue.invokeLater(() -> window = new PlayerWindow(
                 ("Spotfy"),
-                musics,
+                musicsListStatic,
                 buttonListenerPlayNow,
                 buttonListenerRemove,
                 buttonListenerAddSong,
@@ -278,9 +280,10 @@ public class Player {
     }
 
     private void stop(){
-        press_play_pause = false;
+        pressButtonPlayPause = false;
         window.setEnabledStopButton(false);
         window.resetMiniPlayer();
     }
+
     //</editor-fold>
 }
