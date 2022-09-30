@@ -246,7 +246,6 @@ public class Player {
     private void stop(){
         playing = false;
         pressButtonPlayPause = false;
-        window.setEnabledStopButton(false);
         window.resetMiniPlayer();
 
     }
@@ -266,28 +265,15 @@ public class Player {
                     if (window.getScrubberValue() < songPlaying.getMsLength()) {
 
                         musicRunning = playNextFrame();
+
                     } else {
 
                         musicRunning = false;
                     }
 
-                    /*
-                    //Priemira música da lista
-                    if(idxMusic == 0 && songsListDynamic.size() > 1){
-                        window.setEnabledNextButton(true);
-                        window.setEnabledPreviousButton(false);
-
+                    if(!pressButtonPlayPause) {
+                        break;
                     }
-
-                    else if (idxMusic == songsListDynamic.size() - 1){
-                        window.setEnabledNextButton(false);
-                    }
-
-                    //Ativar botões a partir da segunda música da lista
-                     if(idxMusic > 0 && idxMusic < songsListDynamic.size()) {
-                        window.setEnabledPreviousButton(true);
-                    }
-                    */
 
                     if(songsListDynamic.size() == 1){
                         window.setEnabledNextButton(false);
@@ -309,7 +295,6 @@ public class Player {
                         window.setEnabledNextButton(false);
                         window.setEnabledPreviousButton(true);
                     }
-
 
                 } catch (JavaLayerException e) {
                     throw new RuntimeException(e);
