@@ -43,7 +43,9 @@ public class Player {
     private boolean pressButtonPlayPause = true;
     // Variável que é responsável por verificar se o botão de STOP está ativo, caso ele esteja  a música para por completo
     private boolean activeButtonStop = false;
-    private boolean playing = true;
+    private boolean playing = false;
+    private boolean doubleMusic = false;
+    private boolean musicRunning = true;
 
     private final ReentrantLock lock = new ReentrantLock();
     private final Condition lockCondition = lock.newCondition();
@@ -60,116 +62,72 @@ public class Player {
     private Song removeMusic; // Variável do do tipo song que armazena as informaçõs da música que foi removida da lista de reprodução
     private int idxMusic; // Variável quer armazena o ínidice atual da música que esta sendo tocada ou Da música que será removida
 
+    private int idxMusicRemove;
+
     public int currentFrame = 0;
 
-    public void musicPlaying(){
-
-        Thread running = new Thread(() -> {
-            playing = true;
-            while(playing && pressButtonPlayPause){
-                try{
-                    window.setTime((int) (currentFrame * (int) songPlaying.getMsPerFrame()), (int) songPlaying.getMsLength());
-                    if(window.getScrubberValue() < songPlaying.getMsLength()) {
-                        playing = playNextFrame();
-                    }
-                    else{
-                        playing = false;
-                    }
-                } catch (JavaLayerException e) {
-                    throw new RuntimeException(e);
-                }
-            }
-        });
-
-        running.start();
-    }
-
     //Função responsável por reproduzir a múscia
+
     private final ActionListener buttonListenerPlayNow = e -> {
-        currentFrame = 0;
-
-        Thread playing = new Thread(()->{
-            try{
-                lock.lock();
-
-                //Pegando a música especificada pelo usuário (Aquela que ele clicou)
-                idxMusic = window.getIndex();
-                songPlaying = songsListDynamic.get(idxMusic);
-
-                window.setPlayingSongInfo(songPlaying.getTitle(), songPlaying.getAlbum(), songPlaying.getArtist()); //Setando as informações na tela
-                pressButtonPlayPause = true;
-                window.setPlayPauseButtonIcon(1);
-                window.setEnabledPlayPauseButton(true);
-                window.setEnabledStopButton(true);
-                activeButtonPlayPause = true;
-                activeButtonStop = true;
-
-                try {
-                    device = FactoryRegistry.systemRegistry().createAudioDevice();
-                    device.open(decoder = new Decoder());
-                    bitstream = new Bitstream(songPlaying.getBufferedInputStream());
-                    musicPlaying();
-
-                } catch (JavaLayerException | FileNotFoundException ex) {
-                    throw new RuntimeException(ex);
-                }
-
-            }
-            finally {
-                lock.unlock();
-            }
-
-        });
-
-        playing.start();
+        idxMusic = window.getIndex();
+        musicRunner(idxMusic);
     };
     private final ActionListener buttonListenerRemove = e -> {
 
         //Pegando a música que foi selecionada pelo usuário
-        idxMusic = window.getIndex();
-        removeMusic = songsListDynamic.get(idxMusic);
+        idxMusicRemove = window.getIndex();
+        removeMusic = songsListDynamic.get(idxMusicRemove);
 
         //Removendo a música da lista mostrada ao usuário
-        musicsListDynamic.remove(idxMusic);
+        musicsListDynamic.remove(idxMusicRemove);
         musicsListStatic = musicsListDynamic.toArray(new String[this.musicsListDynamic.size()][7]);
         window.setQueueList(musicsListStatic);
 
         //Removendo a música da lista de songs
-        songsListDynamic.remove(idxMusic);
+        songsListDynamic.remove(idxMusicRemove);
 
+        if (idxMusic < idxMusicRemove){
+            idxMusic --;
+        }
+
+        else if(idxMusic == idxMusicRemove){
+            stop();
+        }
+
+        /*
         //Condicional que verifica se a música que está tocando é a que foi removida
         if(currentFrame != 0 && songPlaying == removeMusic){
             stop();
 
         }
-
+           */
 
     };
     private final ActionListener buttonListenerAddSong = e -> {
+        Thread addSong = new Thread(() -> {
+            Song music;
 
-        Song music;
+            //Abertura da aba para recebimento do arquivo de música do usuário
+            try {
+                lock.lock();
+                music = this.window.openFileChooser();
+                //Adicionando a nova música ao array de display
+                musicsListDynamic.add(music.getDisplayInfo());
+                musicsListStatic = musicsListDynamic.toArray(new String[this.musicsListDynamic.size()][7]);
+                window.setQueueList(musicsListStatic);
 
-        //Abertura da aba para recebimento do arquivo de música do usuário
-        try {
-            music = this.window.openFileChooser();
-        } catch (IOException ex) {
-            throw new RuntimeException(ex);
-        } catch (BitstreamException ex) {
-            throw new RuntimeException(ex);
-        } catch (UnsupportedTagException ex) {
-            throw new RuntimeException(ex);
-        } catch (InvalidDataException ex) {
-            throw new RuntimeException(ex);
-        }
+                //Adicionando a nova música ao array de song (Array, que efetivamente executa a música)
+                songsListDynamic.add(music);
 
+            } catch (IOException | BitstreamException | UnsupportedTagException | InvalidDataException ex) {
+                throw new RuntimeException(ex);
+            }finally {
+                lock.unlock();
+            }
 
-        //Adicionando a nova música ao array de display
-        musicsListDynamic.add(music.getDisplayInfo());
-        musicsListStatic = musicsListDynamic.toArray(new String[this.musicsListDynamic.size()][7]);
-        window.setQueueList(musicsListStatic);
+        });
 
-        //Adicionando a nova música ao array de song (Array, que efetivamente executa a música)
-        songsListDynamic.add(music);
+        addSong.start();
 
     };
     private final ActionListener buttonListenerPlayPause = e -> {
@@ -197,8 +155,14 @@ public class Player {
         }
 
     };
-    private final ActionListener buttonListenerNext = e -> {};
-    private final ActionListener buttonListenerPrevious = e -> {};
+    private final ActionListener buttonListenerNext = e -> {
+
+        nextSong();
+    };
+    private final ActionListener buttonListenerPrevious = e -> {
+
+        previousSong();
+    };
     private final ActionListener buttonListenerShuffle = e -> {};
     private final ActionListener buttonListenerLoop = e -> {};
     private final MouseInputAdapter scrubberMouseInputAdapter = new MouseInputAdapter() {
@@ -280,9 +244,154 @@ public class Player {
     }
 
     private void stop(){
+        playing = false;
         pressButtonPlayPause = false;
         window.setEnabledStopButton(false);
         window.resetMiniPlayer();
+
+    }
+
+    public void musicPlaying(){
+
+        Thread running = new Thread(() -> {
+            musicRunning = true;
+            while(musicRunning && pressButtonPlayPause) {
+                try {
+
+                    if (doubleMusic) {
+                        doubleMusic = false;
+                        break;
+                    }
+                    window.setTime((int) (currentFrame * (int) songPlaying.getMsPerFrame()), (int) songPlaying.getMsLength());
+                    if (window.getScrubberValue() < songPlaying.getMsLength()) {
+
+                        musicRunning = playNextFrame();
+                    } else {
+
+                        musicRunning = false;
+                    }
+
+                    /*
+                    //Priemira música da lista
+                    if(idxMusic == 0 && songsListDynamic.size() > 1){
+                        window.setEnabledNextButton(true);
+                        window.setEnabledPreviousButton(false);
+
+                    }
+
+                    else if (idxMusic == songsListDynamic.size() - 1){
+                        window.setEnabledNextButton(false);
+                    }
+
+                    //Ativar botões a partir da segunda música da lista
+                     if(idxMusic > 0 && idxMusic < songsListDynamic.size()) {
+                        window.setEnabledPreviousButton(true);
+                    }
+                    */
+
+                    if(songsListDynamic.size() == 1){
+                        window.setEnabledNextButton(false);
+                        window.setEnabledPreviousButton(false);
+                    }
+
+                    else if(songsListDynamic.size() > 1 && idxMusic == 0) {
+                        window.setEnabledNextButton(true);
+                        window.setEnabledPreviousButton(false);
+
+                    }
+
+                    else if(songsListDynamic.size() > idxMusic + 1 && idxMusic > 0){
+                        window.setEnabledNextButton(true);
+                        window.setEnabledPreviousButton(true);
+                    }
+
+                    else if(idxMusic == songsListDynamic.size() - 1){
+                        window.setEnabledNextButton(false);
+                        window.setEnabledPreviousButton(true);
+                    }
+
+
+                } catch (JavaLayerException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+
+            if(!musicRunning){
+                playing = false;
+            }
+
+            if(playing == false && pressButtonPlayPause == true && idxMusic + 1 < musicsListDynamic.size()){
+                nextSong();
+            }
+
+            else if(idxMusic + 1 > musicsListDynamic.size()) {
+                stop();
+            }
+
+
+        });
+
+        running.start();
+    }
+
+    public void musicRunner(int idxMusic){
+        currentFrame = 0;
+        //pressButtonPlayPause = true;
+
+        if(playing){
+            doubleMusic = true;
+        }
+
+        Thread playing = new Thread(()->{
+            try{
+                lock.lock();
+                this.playing = true;
+
+                //Pegando a música especificada pelo usuário (Aquela que ele clicou)
+                songPlaying = songsListDynamic.get(idxMusic);
+
+
+                window.setPlayingSongInfo(songPlaying.getTitle(), songPlaying.getAlbum(), songPlaying.getArtist()); //Setando as informações na tela
+                pressButtonPlayPause = true;
+                window.setPlayPauseButtonIcon(1);
+                window.setEnabledPlayPauseButton(true);
+                window.setEnabledStopButton(true);
+                activeButtonPlayPause = true;
+                activeButtonStop = true;
+
+                try {
+                    device = FactoryRegistry.systemRegistry().createAudioDevice();
+                    device.open(decoder = new Decoder());
+                    bitstream = new Bitstream(songPlaying.getBufferedInputStream());
+                    musicPlaying();
+
+                } catch (JavaLayerException | FileNotFoundException ex) {
+                    throw new RuntimeException(ex);
+                }
+
+            }
+            finally {
+                lock.unlock();
+            }
+
+        });
+
+        playing.start();
+    }
+
+
+    public void nextSong(){
+        if(idxMusic + 1 < musicsListDynamic.size()){
+            idxMusic ++;
+            musicRunner(idxMusic);
+        }
+    }
+
+    public  void previousSong(){
+        if(idxMusic - 1 >= 0){
+            idxMusic --;
+            musicRunner(idxMusic);
+        }
     }
 
     //</editor-fold>
