@@ -101,6 +101,8 @@ public class Player {
 
         });
 
+        removeSong.start();
+
     };
     //Função responsável por adicionar um novo som a lista, ele abre a janela de adicionar a música
     //Em uma nova thread
@@ -297,7 +299,6 @@ public class Player {
                     //Verifica se o botão de STOP foi pressionado, caso tenha sido, sai do loop e finaliza a execução da Thread
                     if(!pressButtonPlayPause) {
                         break;
-                        
                     }
 
                     //Estrutura de condicional que ativa ou desativa os botões de previous e next
@@ -356,10 +357,10 @@ public class Player {
         }
 
         //Criação da Thread de execução de uma música
-        Thread playing = new Thread(()->{
+        Thread playingThread = new Thread(()->{
             try{
                 lock.lock();
-                this.playing = true;
+                playing = true;
 
                 //Pegando a música especificada pelo usuário (Aquela que ele clicou)
                 songPlaying = songsListDynamic.get(idxMusic);
@@ -392,7 +393,7 @@ public class Player {
 
         });
 
-        playing.start();
+        playingThread.start();
     }
 
     //Função responsável por passar para a próxima música, atualizando o valor do idxMusic e iniciando a execução dela
@@ -408,19 +409,20 @@ public class Player {
         if(idxMusic - 1 >= 0){
             idxMusic --;
             musicRunner(idxMusic);
+
         }
     }
 
     //Função que Pula ou retrocede a música conforme o alterado no Scrubber
     public void jumpSong(){
-        //Recriando o device, decoder e bitstream, para possibilitar
-        //Voltar para um ponto da música
         try {
+            //Recriando o device, decoder e bitstream, para possibilitar
+            //Voltar para um ponto da música
+
             currentFrame = 0;
             device = FactoryRegistry.systemRegistry().createAudioDevice();
             device.open(decoder = new Decoder());
             bitstream = new Bitstream(songPlaying.getBufferedInputStream());
-
 
         } catch (JavaLayerException | FileNotFoundException ex) {
             throw new RuntimeException(ex);
@@ -440,13 +442,14 @@ public class Player {
         if(playing && activeButtonPlayPause == true){
             pressButtonPlayPause = true;
         }
-
         musicPlaying();
+
     }
 
     //Função responsável por pausar a reprodução da música quando o scruber for segurado e arrastado
     public void press(){
         pressButtonPlayPause = false;
+
     }
 
     //</editor-fold>
