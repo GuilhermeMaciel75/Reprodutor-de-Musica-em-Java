@@ -6,7 +6,6 @@ import javazoom.jl.player.FactoryRegistry;
 import support.PlayerWindow;
 import support.Song;
 
-import javax.swing.*;
 import javax.swing.event.MouseInputAdapter;
 import java.awt.*;
 import java.awt.event.ActionListener;
@@ -34,8 +33,6 @@ public class Player {
 
     private PlayerWindow window;
 
-    private SwingWorker runner;
-
     //Variável booleana responsável por saber em qual estado o botão de play/ pause está
     private boolean activeButtonPlayPause = true;
 
@@ -53,7 +50,7 @@ public class Player {
 
     //Array dinamicos, o primeiro salva todas as músicas da classe Song
     //Já o segundo guarda apenas as musicas que serão coladas no display para vizualização pelo usuário
-    private ArrayList<Song> songsListDynamic = new ArrayList<Song>();
+    private ArrayList<Song> songsListDynamic = new ArrayList<>();
     private ArrayList<String[]> musicsListDynamic = new ArrayList<String[]>();
     private String[][] musicsListStatic = {};
 
@@ -272,19 +269,22 @@ public class Player {
      * Função responsável por efetivamente rodar a música e atualizar as informações no player
      *
      */
-
     public void musicPlaying(){
 
         Thread running = new Thread(() -> {
             musicRunning = true;
+            // Loop que irá reproduzir a música até ela finalizar ou algum evento de Pause / Quit for acionado
             while(musicRunning && pressButtonPlayPause) {
                 try {
-
+                    // Condicional que verifica se duas músicas estão tocando ao mesmo tempo, e finaliza a execução da primeira
                     if (doubleMusic) {
                         doubleMusic = false;
                         break;
                     }
+                    //Atualozando valores do Player
                     window.setTime((int) (currentFrame * (int) songPlaying.getMsPerFrame()), (int) songPlaying.getMsLength());
+
+                    //Estrutura condiocional que reproduz a música, caso ainda exista música a ser reproduzida
                     if (window.getScrubberValue() < songPlaying.getMsLength()) {
 
                         musicRunning = playNextFrame();
@@ -294,11 +294,13 @@ public class Player {
                         musicRunning = false;
                     }
 
+                    //Verifica se o botão de STOP foi pressionado, caso tenha sido, sai do loop e finaliza a execução da Thread
                     if(!pressButtonPlayPause) {
                         break;
                         
                     }
 
+                    //Estrutura de condicional que ativa ou desativa os botões de previous e next
                     if(songsListDynamic.size() == 1){
                         window.setEnabledNextButton(false);
                         window.setEnabledPreviousButton(false);
@@ -325,6 +327,8 @@ public class Player {
                 }
             }
 
+            // Estrutura condiconal que verifica o que se faz ao término de uma música, caso não haja mais nenhuma música, ou caso ele tenha
+            // Que passar para a execução da próxima música da lista
             if(!musicRunning){
                 playing = false;
             }
@@ -345,12 +349,13 @@ public class Player {
 
     public void musicRunner(int idxMusic){
         currentFrame = 0;
-        //pressButtonPlayPause = true;
 
+        //Verifica se há duas músicas tocando e muda o valor da variável doubleMusic afim de parar a execução dessa música
         if(playing){
             doubleMusic = true;
         }
 
+        //Criação da Thread de execução de uma música
         Thread playing = new Thread(()->{
             try{
                 lock.lock();
@@ -359,7 +364,7 @@ public class Player {
                 //Pegando a música especificada pelo usuário (Aquela que ele clicou)
                 songPlaying = songsListDynamic.get(idxMusic);
 
-
+                //Realizando Update no Player de múscia e setando alguns botões
                 window.setPlayingSongInfo(songPlaying.getTitle(), songPlaying.getAlbum(), songPlaying.getArtist()); //Setando as informações na tela
                 pressButtonPlayPause = true;
                 window.setPlayPauseButtonIcon(1);
@@ -370,6 +375,7 @@ public class Player {
                 activeButtonStop = true;
 
                 try {
+                    //Criando o dispositivo de áudio e inicializando a reprodução da múxica
                     device = FactoryRegistry.systemRegistry().createAudioDevice();
                     device.open(decoder = new Decoder());
                     bitstream = new Bitstream(songPlaying.getBufferedInputStream());
@@ -389,7 +395,7 @@ public class Player {
         playing.start();
     }
 
-
+    //Função responsável por passar para a próxima música, atualizando o valor do idxMusic e iniciando a execução dela
     public void nextSong(){
         if(idxMusic + 1 < musicsListDynamic.size()){
             idxMusic ++;
@@ -397,12 +403,15 @@ public class Player {
         }
     }
 
+    //Função responsável por retornar para a música anterior, atualizando o valor do idxMusic e iniciando a execução dela
     public  void previousSong(){
         if(idxMusic - 1 >= 0){
             idxMusic --;
             musicRunner(idxMusic);
         }
     }
+
+    //Função que Pula ou retrocede a música conforme o alterado no Scrubber
     public void jumpSong(){
         //Recriando o device, decoder e bitstream, para possibilitar
         //Voltar para um ponto da música
@@ -417,47 +426,25 @@ public class Player {
             throw new RuntimeException(ex);
         }
 
+        //Pegando o valor atual do scruber, e atualizando o MiniPlayer
         actualTime = (int) (window.getScrubberValue() / songPlaying.getMsPerFrame());
         window.setTime((int) (actualTime * (int) songPlaying.getMsPerFrame()), (int) songPlaying.getMsLength());
 
+        //Pulando para os Bits que foram "Escolhidos" ao alterar o Scrubber
         try {
             skipToFrame(actualTime);
         } catch (BitstreamException e) {
             throw new RuntimeException(e);
         }
-        if(playing){
+
+        if(playing && activeButtonPlayPause == true){
             pressButtonPlayPause = true;
         }
 
         musicPlaying();
     }
 
-    public void jumpSongPressed(){
-        //Recriando o device, decoder e bitstream, para possibilitar
-        //Voltar para um ponto da música
-        try {
-            currentFrame = 0;
-            device = FactoryRegistry.systemRegistry().createAudioDevice();
-            device.open(decoder = new Decoder());
-            bitstream = new Bitstream(songPlaying.getBufferedInputStream());
-
-
-        } catch (JavaLayerException | FileNotFoundException ex) {
-            throw new RuntimeException(ex);
-        }
-
-        actualTime = (int) (window.getScrubberValue() / songPlaying.getMsPerFrame());
-        window.setTime((int) (actualTime * (int) songPlaying.getMsPerFrame()), (int) songPlaying.getMsLength());
-
-        try {
-            skipToFrame(actualTime);
-        } catch (BitstreamException e) {
-            throw new RuntimeException(e);
-        }
-
-        musicPlaying();
-    }
-
+    //Função responsável por pausar a reprodução da música quando o scruber for segurado e arrastado
     public void press(){
         pressButtonPlayPause = false;
     }
