@@ -44,6 +44,8 @@ public class Player {
     private boolean doubleMusic = false;
     private boolean musicRunning = true;
 
+    private boolean activeLoop = false; // Variável responsável por verificar se o botão de loop está ativo
+
     private final ReentrantLock lock = new ReentrantLock();
     private final Condition lockCondition = lock.newCondition();
 
@@ -171,7 +173,10 @@ public class Player {
         previousSong();
     };
     private final ActionListener buttonListenerShuffle = e -> {};
-    private final ActionListener buttonListenerLoop = e -> {};
+    private final ActionListener buttonListenerLoop = e -> {
+        activeLoop = true;
+
+    };
     //Função responsáve2l por mudar o tempo da música a partir do clique no scruber
     private final MouseInputAdapter scrubberMouseInputAdapter = new MouseInputAdapter() {
         @Override
@@ -338,6 +343,11 @@ public class Player {
                 nextSong();
             }
 
+            else if(playing == false && activeLoop == true && idxMusic + 1 == musicsListDynamic.size()){
+                idxMusic = 0;
+                musicRunner(idxMusic);
+            }
+
             else if(idxMusic + 1 > musicsListDynamic.size()) {
                 stop();
             }
@@ -374,6 +384,7 @@ public class Player {
                 window.setEnabledScrubber(true);
                 activeButtonPlayPause = true;
                 activeButtonStop = true;
+                window.setEnabledLoopButton(true);
 
                 try {
                     //Criando o dispositivo de áudio e inicializando a reprodução da múxica
