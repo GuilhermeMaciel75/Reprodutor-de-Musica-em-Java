@@ -174,7 +174,15 @@ public class Player {
     };
     private final ActionListener buttonListenerShuffle = e -> {};
     private final ActionListener buttonListenerLoop = e -> {
-        activeLoop = true;
+
+        if(activeLoop == false){
+            activeLoop = true;
+        }
+
+        else{
+            activeLoop = false;
+        }
+
 
     };
     //Função responsáve2l por mudar o tempo da música a partir do clique no scruber
