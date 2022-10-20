@@ -15,6 +15,8 @@ import java.io.IOException;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.ArrayList;
+import java.util.Collections;
+
 
 public class Player {
 
@@ -43,8 +45,8 @@ public class Player {
     private boolean playing = false;
     private boolean doubleMusic = false;
     private boolean musicRunning = true;
-
     private boolean activeLoop = false; // Variável responsável por verificar se o botão de loop está ativo
+    private boolean activeShuffle = false;
 
     private final ReentrantLock lock = new ReentrantLock();
     private final Condition lockCondition = lock.newCondition();
@@ -53,16 +55,21 @@ public class Player {
     //Array dinamicos, o primeiro salva todas as músicas da classe Song
     //Já o segundo guarda apenas as musicas que serão coladas no display para vizualização pelo usuário
     private ArrayList<Song> songsListDynamic = new ArrayList<>();
+    private ArrayList<Song> songsListDynamicBackup = new ArrayList<>(); //Array de Backup da lista antes do shuffle
     private ArrayList<String[]> musicsListDynamic = new ArrayList<String[]>();
     private String[][] musicsListStatic = {};
 
     //Variaveis utilizadas nas funções
     private Song songPlaying; // Variável do tipo song, que armazena as informações da música que está sendo tocada no momento
     private Song removeMusic; // Variável do do tipo song que armazena as informaçõs da música que foi removida da lista de reprodução
+
+    private Song music;
     private int idxMusic; // Variável quer armazena o ínidice atual da música que esta sendo tocada ou Da música que será removida
 
     private int idxMusicRemove;
     private int actualTime;
+
+    private int loopi = 0;
 
     public int currentFrame = 0;
 
@@ -97,6 +104,21 @@ public class Player {
                 else if(idxMusic == idxMusicRemove){
                     stop();
                 }
+
+                if(songsListDynamic.size() >= 2){
+                    window.setEnabledShuffleButton(true);
+                }
+                else{
+                    window.setEnabledShuffleButton(false);
+                }
+
+                if(songsListDynamic.size() >= 1){
+                    window.setEnabledLoopButton(true);
+                }
+                else{
+                    window.setEnabledLoopButton(false);
+                }
+
             } finally {
                 lock.unlock();
             }
@@ -123,6 +145,20 @@ public class Player {
 
                 //Adicionando a nova música ao array de song (Array, que efetivamente executa a música)
                 songsListDynamic.add(music);
+
+                if(songsListDynamic.size() >= 2){
+                    window.setEnabledShuffleButton(true);
+                }
+                else{
+                    window.setEnabledShuffleButton(false);
+                }
+
+                if(songsListDynamic.size() >= 1){
+                    window.setEnabledLoopButton(true);
+                }
+                else{
+                    window.setEnabledLoopButton(false);
+                }
 
             } catch (IOException | BitstreamException | UnsupportedTagException | InvalidDataException ex) {
                 throw new RuntimeException(ex);
@@ -172,17 +208,49 @@ public class Player {
 
         previousSong();
     };
-    private final ActionListener buttonListenerShuffle = e -> {};
+    private final ActionListener buttonListenerShuffle = e -> {
+        //Criando a Thread que será responsável por rodar os processos do shuffle
+        Thread shuffle = new Thread(() -> {
+
+            try {
+                lock.lock();
+                //Estrutura de condicional que verifica o estado do botão shuffle
+                if(!activeShuffle) {
+                    activeShuffle = true; //Muda o estado atual
+                    songsListDynamicBackup = (ArrayList<Song>) songsListDynamic.clone(); //Cria um clone da lista inical
+                    music = songsListDynamicBackup.get(idxMusic); // Pega a múscia que está sendo tocada atualmente
+                    Collections.shuffle(songsListDynamic); // Embaralha da lista de músicas
+                    songsListDynamic.remove(music); // Remove a música que está sendo tocada da lista
+                    songsListDynamic.add(0, music); //Adiciona novamente essa música no ínicio da lista embaralhada
+                    idxMusic = 0;
+
+                } else {
+                    activeShuffle = false; //Muda o estado atual
+                    music = songsListDynamic.get(idxMusic); // Pega a múscia que está sendo tocada atualmente
+                    songsListDynamic = songsListDynamicBackup; //Pega o backup feito da lista inicial
+                    idxMusic = songsListDynamic.indexOf(music); //Muda o valor do indice da música atual para o mesmo indice na lista inical
+                }
+                musicsListDynamic.clear(); //Limpando a lista dinâmica de musicas (Aquela que é usada para mostrar no palyer)
+                for (Song i : songsListDynamic){
+                    musicsListDynamic.add(i.getDisplayInfo()); //Adciona os metadados na música a essa lista de string a essa nova lista
+                    loopi ++;
+                }
+
+                //Atualiza o valor no player
+                musicsListStatic = musicsListDynamic.toArray(new String[this.musicsListDynamic.size()][7]);
+                window.setQueueList(musicsListStatic);
+            } finally {
+                lock.unlock();
+            }
+
+        });
+
+        shuffle.start();
+
+
+    };
     private final ActionListener buttonListenerLoop = e -> {
-
-        if(activeLoop == false){
-            activeLoop = true;
-        }
-
-        else{
-            activeLoop = false;
-        }
-
+        activeLoop = !activeLoop; //Muda o estado do Loop
 
     };
     //Função responsáve2l por mudar o tempo da música a partir do clique no scruber
@@ -351,6 +419,7 @@ public class Player {
                 nextSong();
             }
 
+            //Caso tenha chegado ao fim da lista de reprodução e o botão de loop esteja ativo, reinicia a reprodução
             else if(playing == false && activeLoop == true && idxMusic + 1 == musicsListDynamic.size()){
                 idxMusic = 0;
                 musicRunner(idxMusic);
