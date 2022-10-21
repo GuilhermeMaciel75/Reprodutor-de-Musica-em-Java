@@ -47,6 +47,7 @@ public class Player {
     private boolean musicRunning = true;
     private boolean activeLoop = false; // Variável responsável por verificar se o botão de loop está ativo
     private boolean activeShuffle = false;
+    private boolean songAdd = false;
 
     private final ReentrantLock lock = new ReentrantLock();
     private final Condition lockCondition = lock.newCondition();
@@ -95,9 +96,10 @@ public class Player {
                 window.setQueueList(musicsListStatic);
 
                 //Removendo a música da lista de songs
-                songsListDynamic.remove(idxMusicRemove);
+                removeMusic = songsListDynamic.remove(idxMusicRemove);
+                songsListDynamicBackup.remove(removeMusic);
 
-                if (idxMusic < idxMusicRemove){
+                if (idxMusic > idxMusicRemove){
                     idxMusic --;
                 }
 
@@ -145,6 +147,8 @@ public class Player {
 
                 //Adicionando a nova música ao array de song (Array, que efetivamente executa a música)
                 songsListDynamic.add(music);
+                songsListDynamicBackup.add(music);
+                songAdd = true;
 
                 if(songsListDynamic.size() >= 2){
                     window.setEnabledShuffleButton(true);
@@ -229,6 +233,7 @@ public class Player {
                     music = songsListDynamic.get(idxMusic); // Pega a múscia que está sendo tocada atualmente
                     songsListDynamic = songsListDynamicBackup; //Pega o backup feito da lista inicial
                     idxMusic = songsListDynamic.indexOf(music); //Muda o valor do indice da música atual para o mesmo indice na lista inical
+
                 }
                 musicsListDynamic.clear(); //Limpando a lista dinâmica de musicas (Aquela que é usada para mostrar no palyer)
                 for (Song i : songsListDynamic){
