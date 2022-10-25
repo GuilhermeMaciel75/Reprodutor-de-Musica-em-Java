@@ -35,26 +35,21 @@ public class Player {
 
     private PlayerWindow window;
 
-    //Variável booleana responsável por saber em qual estado o botão de play/ pause está
-    private boolean activeButtonPlayPause = true;
 
-    // Variável que é responsável por verificar se o botão de pause está ativo
-    private boolean pressButtonPlayPause = true;
-    // Variável que é responsável por verificar se o botão de STOP está ativo, caso ele esteja  a música para por completo
-    private boolean activeButtonStop = false;
-    private boolean playing = false;
-    private boolean doubleMusic = false;
-    private boolean musicRunning = true;
+    private boolean activeButtonPlayPause = true; //Variável booleana responsável por saber em qual estado o botão de play/ pause está
+    private boolean pressButtonPlayPause = true; // Variável que é responsável por verificar se o botão de pause está ativo
+    private boolean playing = false; //Variável que verificar se a música está sendo reproduzida
+    private boolean doubleMusic = false; //Variável utilizada para verificar se duas músicas estão tocando ao mesmo tempo
+    private boolean musicRunning = true; //Variável interna de quando a musica está sendo tocada
     private boolean activeLoop = false; // Variável responsável por verificar se o botão de loop está ativo
-    private boolean activeShuffle = false;
-    private boolean songAdd = false;
-
+    private boolean activeShuffle = false; //Variável que verifica se o shuffle está ativo
     private final ReentrantLock lock = new ReentrantLock();
     private final Condition lockCondition = lock.newCondition();
 
 
     //Array dinamicos, o primeiro salva todas as músicas da classe Song
-    //Já o segundo guarda apenas as musicas que serão coladas no display para vizualização pelo usuário
+    //O segundo armazena a lista inicial, antes do shuffle
+    //Já o terceiro guarda apenas as musicas que serão coladas no display para vizualização pelo usuário
     private ArrayList<Song> songsListDynamic = new ArrayList<>();
     private ArrayList<Song> songsListDynamicBackup = new ArrayList<>(); //Array de Backup da lista antes do shuffle
     private ArrayList<String[]> musicsListDynamic = new ArrayList<String[]>();
@@ -67,10 +62,10 @@ public class Player {
     private Song music;
     private int idxMusic; // Variável quer armazena o ínidice atual da música que esta sendo tocada ou Da música que será removida
 
-    private int idxMusicRemove;
-    private int actualTime;
+    private int idxMusicRemove; //Variável que armazena o indice da música removida
+    private int actualTime; //Variável utilizada para calcular o tempo que será pulado no scrubble
 
-    private int loopi = 0;
+    private int loopi = 0; //Variável para indexar o array no for
 
     public int currentFrame = 0;
 
@@ -148,7 +143,6 @@ public class Player {
                 //Adicionando a nova música ao array de song (Array, que efetivamente executa a música)
                 songsListDynamic.add(music);
                 songsListDynamicBackup.add(music);
-                songAdd = true;
 
                 if(songsListDynamic.size() >= 2){
                     window.setEnabledShuffleButton(true);
@@ -193,15 +187,10 @@ public class Player {
             musicPlaying();
             window.setPlayPauseButtonIcon(1);
         }
-
     };
     //Função responsável por dar um STOP na música
     private final ActionListener buttonListenerStop = e -> {
-
-        if(activeButtonStop == true){
-            stop();
-        }
-
+        stop();
     };
     //Função responsável por pular para a proima música
     private final ActionListener buttonListenerNext = e -> {
@@ -209,9 +198,9 @@ public class Player {
     };
     //Função responsável por retornar para a música anterior
     private final ActionListener buttonListenerPrevious = e -> {
-
         previousSong();
     };
+    //Função responsável por realizar op shuffle da lista de música
     private final ActionListener buttonListenerShuffle = e -> {
         //Criando a Thread que será responsável por rodar os processos do shuffle
         Thread shuffle = new Thread(() -> {
@@ -258,7 +247,7 @@ public class Player {
         activeLoop = !activeLoop; //Muda o estado do Loop
 
     };
-    //Função responsáve2l por mudar o tempo da música a partir do clique no scruber
+    //Função responsável por mudar o tempo da música a partir do clique no scruber
     private final MouseInputAdapter scrubberMouseInputAdapter = new MouseInputAdapter() {
         @Override
         public void mouseReleased(MouseEvent e) {
@@ -345,7 +334,6 @@ public class Player {
      *
      *
      */
-
     private void stop(){
         playing = false;
         pressButtonPlayPause = false;
@@ -439,7 +427,10 @@ public class Player {
 
         running.start();
     }
-
+    /**
+     * Função responsável por atualizar as informações do miniplayer e criar os dipositivos de audio
+     *
+     */
     public void musicRunner(int idxMusic){
         currentFrame = 0;
 
@@ -459,14 +450,19 @@ public class Player {
 
                 //Realizando Update no Player de múscia e setando alguns botões
                 window.setPlayingSongInfo(songPlaying.getTitle(), songPlaying.getAlbum(), songPlaying.getArtist()); //Setando as informações na tela
-                pressButtonPlayPause = true;
-                window.setPlayPauseButtonIcon(1);
-                window.setEnabledPlayPauseButton(true);
-                window.setEnabledStopButton(true);
-                window.setEnabledScrubber(true);
-                activeButtonPlayPause = true;
-                activeButtonStop = true;
-                window.setEnabledLoopButton(true);
+
+                if(pressButtonPlayPause){
+                    window.setPlayPauseButtonIcon(1);
+                }
+                else{
+                    window.setPlayPauseButtonIcon(0);
+                }
+
+                window.setEnabledPlayPauseButton(playing);
+                window.setEnabledStopButton(playing);
+                window.setEnabledScrubber(playing);
+
+                window.setEnabledLoopButton(playing);
 
                 try {
                     //Criando o dispositivo de áudio e inicializando a reprodução da múxica
@@ -492,6 +488,14 @@ public class Player {
     //Função responsável por passar para a próxima música, atualizando o valor do idxMusic e iniciando a execução dela
     public void nextSong(){
         if(idxMusic + 1 < musicsListDynamic.size()){
+            //Caso a música esteja pauasada, ele a finaliza e muda o estado do botão
+            if(!activeButtonPlayPause){
+                stop();
+                pressButtonPlayPause = true;
+                activeButtonPlayPause = true;
+                window.setPlayPauseButtonIcon(1);
+            }
+
             idxMusic ++;
             musicRunner(idxMusic);
         }
@@ -500,6 +504,13 @@ public class Player {
     //Função responsável por retornar para a música anterior, atualizando o valor do idxMusic e iniciando a execução dela
     public  void previousSong(){
         if(idxMusic - 1 >= 0){
+            //Caso a música esteja pauasada, ele a finaliza e muda o estado do botão
+            if(!activeButtonPlayPause) {
+                stop();
+                pressButtonPlayPause = true;
+                activeButtonPlayPause = true;
+                window.setPlayPauseButtonIcon(1);
+            }
             idxMusic --;
             musicRunner(idxMusic);
 
@@ -544,6 +555,5 @@ public class Player {
         pressButtonPlayPause = false;
 
     }
-
     //</editor-fold>
 }
